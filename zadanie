@@ -1,0 +1,84 @@
+// app.js
+
+require('dotenv').config();
+const fetch = require('node-fetch');
+const fs = require('fs');
+
+// Klucz API OpenAI
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// Ścieżka do pliku z artykułem
+const ARTICLE_FILE = './artykul.txt';
+const OUTPUT_FILE = './artykul.html';
+
+// Funkcja odczytująca plik
+async function readArticle(filePath) {
+    return new Promise((resolve, reject) => {
+        fs.readFile(filePath, 'utf8', (err, data) => {
+            if (err) reject(err);
+            resolve(data);
+        });
+    });
+}
+
+// Funkcja zapisująca wynik w pliku
+async function saveHtml(filePath, content) {
+    return new Promise((resolve, reject) => {
+        fs.writeFile(filePath, content, 'utf8', (err) => {
+            if (err) reject(err);
+            resolve();
+        });
+    });
+}
+
+// Funkcja komunikująca się z OpenAI API
+async function processArticleWithOpenAI(prompt, apiKey) {
+    const response = await fetch('https://api.openai.com/v1/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model: 'text-davinci-003',
+            prompt,
+            max_tokens: 1500,
+            temperature: 0.7,
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`OpenAI API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].text.trim();
+}
+
+// Główna funkcja aplikacji
+async function main() {
+    try {
+        console.log('Odczytuję artykuł...');
+        const articleContent = await readArticle(ARTICLE_FILE);
+
+        const prompt = `
+Przekształć poniższy artykuł na kod HTML. Kod ma spełniać następujące wymagania:
+- Użyj odpowiednich tagów HTML do strukturyzacji treści.
+- Określ miejsca na grafiki, używając <img src="image_placeholder.jpg"> z atrybutem alt i podpisem w tagu <figcaption>.
+- Brak CSS i JavaScript, tylko zawartość do <body>.
+Artykuł:
+${articleContent}`;
+
+        console.log('Wysyłam artykuł do OpenAI...');
+        const htmlContent = await processArticleWithOpenAI(prompt, OPENAI_API_KEY);
+
+        console.log('Zapisuję wygenerowany kod HTML...');
+        await saveHtml(OUTPUT_FILE, htmlContent);
+
+        console.log(`Kod HTML został zapisany w pliku: ${OUTPUT_FILE}`);
+    } catch (error) {
+        console.error('Wystąpił błąd:', error.message);
+    }
+}
+
+main();
